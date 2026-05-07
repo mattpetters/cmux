@@ -473,8 +473,8 @@ struct SocketControlSettings {
         if let taggedDebugPath = taggedDebugSocketPath(bundleIdentifier: bundleIdentifier, environment: [:]) {
             return taggedDebugPath
         }
-        if bundleIdentifier == "com.cmuxterm.app.nightly" {
-            return "/tmp/cmux-nightly.sock"
+        if isNightlyBundleIdentifier(bundleIdentifier) {
+            return nightlySocketPath(bundleIdentifier: bundleIdentifier)
         }
         if isDebugLikeBundleIdentifier(bundleIdentifier) || isDebugBuild {
             return "/tmp/cmux-debug.sock"
@@ -528,6 +528,25 @@ struct SocketControlSettings {
             return true
         }
         return isDebugBuild
+    }
+
+    static func isNightlyBundleIdentifier(_ bundleIdentifier: String?) -> Bool {
+        guard let bundleIdentifier else { return false }
+        return bundleIdentifier == "com.cmuxterm.app.nightly"
+            || bundleIdentifier.hasPrefix("com.cmuxterm.app.nightly.")
+    }
+
+    static func nightlySocketPath(bundleIdentifier: String?) -> String {
+        let bundleId = bundleIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard bundleId.hasPrefix("com.cmuxterm.app.nightly."),
+              bundleId.count > "com.cmuxterm.app.nightly.".count else {
+            return "/tmp/cmux-nightly.sock"
+        }
+        let suffix = String(bundleId.dropFirst("com.cmuxterm.app.nightly.".count))
+        let slug = suffix
+            .replacingOccurrences(of: ".", with: "-")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        return slug.isEmpty ? "/tmp/cmux-nightly.sock" : "/tmp/cmux-nightly-\(slug).sock"
     }
 
     static func isDebugLikeBundleIdentifier(_ bundleIdentifier: String?) -> Bool {

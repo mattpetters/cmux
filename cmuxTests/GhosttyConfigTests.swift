@@ -1748,6 +1748,19 @@ final class SocketControlSettingsTests: XCTestCase {
         XCTAssertEqual(path, "/tmp/cmux-nightly.sock")
     }
 
+    func testForkedNightlyReleaseUsesDedicatedSocketSuffix() {
+        let path = SocketControlSettings.socketPath(
+            environment: [
+                "CMUX_SOCKET_PATH": "/tmp/cmux-debug-issue-153-tmux-compat.sock",
+            ],
+            bundleIdentifier: "com.cmuxterm.app.nightly.mattpetters",
+            isDebugBuild: false,
+            probeStableDefaultPathEntry: { _ in .missing }
+        )
+
+        XCTAssertEqual(path, "/tmp/cmux-nightly-mattpetters.sock")
+    }
+
     func testDebugBundleHonorsSocketOverrideWithoutOptInFlag() {
         let path = SocketControlSettings.socketPath(
             environment: [
