@@ -8,9 +8,9 @@ Each command starts inside the terminal's non-interactive login shell. That keep
 
 ## Configuration
 
-Dock is configured with JSON:
+Dock is configured with JSONC, so comments and trailing commas are allowed:
 
-```json
+```jsonc
 {
   "controls": [
     {
@@ -48,7 +48,7 @@ Fields:
 - `height`: optional requested terminal height in points. Controls without a height share remaining space.
 - `env`: optional non-secret environment variables passed only to that control.
 
-The order of `controls` is the order shown in Dock. Reorder entries in the file to reorder Dock controls. Remove an entry from the file to remove it from Dock.
+The order of `controls` is the order shown in Dock. Reorder entries in the file to reorder Dock controls. Remove an entry from the file to remove it from Dock. Because Dock config is JSONC, you can also temporarily disable controls with `//` or `/* ... */` comments.
 
 ## Config Precedence
 
