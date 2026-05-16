@@ -101,7 +101,7 @@ struct DockEmptyView: View {
             2. Inspect the repository or current directory to understand the project type, scripts, package manager, dev servers, logs, task runners, test commands, and any existing TUI tools.
             3. If the desired Dock is ambiguous, ask the user what they want monitored or controlled before writing files.
 
-            Dock is cmux's right-sidebar terminal control area. A Dock config is JSON with a top-level `controls` array. Each control runs a command in its own Ghostty-backed terminal section using the user's login shell. Controls are useful for project dashboards, git/status views, dev server or build status, test watchers, log tails, queues, local services, or a custom TUI such as `cmux feed tui --opentui` when that feed is useful.
+            Dock is cmux's right-sidebar terminal control area. A Dock config is JSONC with a top-level `controls` array, so comments and trailing commas are allowed. Each control runs a command in its own Ghostty-backed terminal section using the user's login shell. Controls are useful for project dashboards, git/status views, dev server or build status, test watchers, log tails, queues, local services, or a custom TUI such as `cmux feed tui --opentui` when that feed is useful.
 
             Choose where to write the config:
             - In a repository or project directory, create or edit `.cmux/dock.json` so teammates can share it.
@@ -136,7 +136,7 @@ struct DockEmptyView: View {
             Deliverable:
             - Create or update the appropriate dock.json.
             - Preserve existing useful controls unless the user asked to replace them.
-            - Validate that the JSON parses.
+            - Validate that the JSONC parses.
             - Summarize what each control does and any commands the user should review before trusting the Dock config.
             """
         )

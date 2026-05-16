@@ -7,6 +7,73 @@ import XCTest
 @testable import cmux
 #endif
 
+final class DockConfigParserTests: XCTestCase {
+
+    private func decodeControls(_ source: String) throws -> [DockControlDefinition] {
+        try DockConfigParser.decodeControls(data: Data(source.utf8))
+    }
+
+    func testParsesLineCommentedControlAndTrailingComma() throws {
+        let controls = try decodeControls("""
+        {
+          "controls": [
+            {
+              "id": "git",
+              "title": "Git",
+              "command": "lazygit",
+            },
+            // {
+            //   "id": "logs",
+            //   "title": "Logs",
+            //   "command": "tail -f ./logs/development.log"
+            // }
+          ]
+        }
+        """)
+
+        XCTAssertEqual(controls.map(\.id), ["git"])
+        XCTAssertEqual(controls.first?.command, "lazygit")
+    }
+
+    func testParsesBlockCommentedControlAndPreservesCommentSyntaxInStrings() throws {
+        let controls = try decodeControls("""
+        {
+          "controls": [
+            /*
+            {
+              "id": "disabled",
+              "title": "Disabled",
+              "command": "echo disabled"
+            },
+            */
+            {
+              "id": "server",
+              "title": "Server",
+              "command": "echo http://localhost:3000 && echo not-a-comment"
+            }
+          ]
+        }
+        """)
+
+        XCTAssertEqual(controls.map(\.id), ["server"])
+        XCTAssertEqual(controls.first?.command, "echo http://localhost:3000 && echo not-a-comment")
+    }
+
+    func testReportsJSONCPreprocessingErrors() {
+        XCTAssertThrowsError(try decodeControls("""
+        {
+          "controls": [
+            /*
+            { "id": "git", "command": "lazygit" }
+          ]
+        }
+        """)) { error in
+            XCTAssertTrue(error.localizedDescription.contains("JSONC preprocessing failed"))
+            XCTAssertTrue(error.localizedDescription.contains("unterminated block comment"))
+        }
+    }
+}
+
 // MARK: - JSON Decoding
 
 final class CmuxConfigDecodingTests: XCTestCase {

@@ -83,6 +83,27 @@ private struct DockConfigFile: Codable {
     let controls: [DockControlDefinition]
 }
 
+enum DockConfigParser {
+    static func decodeControls(data: Data) throws -> [DockControlDefinition] {
+        let sanitized: Data
+        do {
+            sanitized = try JSONCParser.preprocess(data: data)
+        } catch {
+            throw NSError(
+                domain: "cmux.dock",
+                code: 2,
+                userInfo: [
+                    NSLocalizedDescriptionKey: String(
+                        localized: "dock.error.jsoncPreprocessingFailed",
+                        defaultValue: "JSONC preprocessing failed: \(error.localizedDescription)"
+                    )
+                ]
+            )
+        }
+        return try JSONDecoder().decode(DockConfigFile.self, from: sanitized).controls
+    }
+}
+
 private struct DockConfigResolution {
     let controls: [DockControlDefinition]
     let sourceURL: URL?
@@ -433,9 +454,9 @@ final class DockControlsStore: ObservableObject {
         isProjectSource: Bool
     ) throws -> DockConfigResolution {
         let data = try Data(contentsOf: url)
-        let file = try JSONDecoder().decode(DockConfigFile.self, from: data)
+        let controls = try DockConfigParser.decodeControls(data: data)
         var seen = Set<String>()
-        for control in file.controls {
+        for control in controls {
             guard seen.insert(control.id).inserted else {
                 throw NSError(
                     domain: "cmux.dock",
@@ -450,7 +471,7 @@ final class DockControlsStore: ObservableObject {
             }
         }
         return DockConfigResolution(
-            controls: file.controls,
+            controls: controls,
             sourceURL: url,
             baseDirectory: baseDirectory,
             isProjectSource: isProjectSource
