@@ -11,6 +11,7 @@ import { DocsHeading } from "../../components/docs-heading";
 type SchemaProperty = {
   title?: string;
   description?: string;
+  descriptionKey?: string;
   type?: string | string[];
   enum?: string[];
   default?: unknown;
@@ -39,6 +40,7 @@ const sectionOrder = [
   "terminal",
   "notifications",
   "sidebar",
+  "workspaceGroups",
   "workspaceColors",
   "sidebarAppearance",
   "automation",
@@ -57,6 +59,7 @@ const settingsFileExample = `{
   //   "appearance": "dark",
   //   "menuBarOnly": false,
   //   "newWorkspacePlacement": "afterCurrent",
+  //   "confirmQuit": "always",
   //   "openSupportedFilesInCmux": true,
   //   "workspaceInheritWorkingDirectory": true,
   //   "iMessageMode": true
@@ -64,12 +67,29 @@ const settingsFileExample = `{
 
   // "terminal": {
   //   "showScrollBar": false,
-  //   "autoResumeAgentSessions": true
+  //   "copyOnSelect": true,
+  //   "autoResumeAgentSessions": true,
+  //   "showTextBoxOnNewTerminals": false,
+  //   "focusTextBoxOnNewTerminals": false,
+  //   "agentHibernation": {
+  //     "enabled": false,
+  //     "idleSeconds": 3600,
+  //     "maxLiveTerminals": 12
+  //   },
+  //   "textBoxMaxLines": 10
   // },
 
   // "browser": {
+  //   "defaultSearchEngine": "kagi",
+  //   // For an unlisted provider, set "defaultSearchEngine": "custom" and fill these:
+  //   "customSearchEngineName": "My Search",
+  //   "customSearchEngineURLTemplate": "https://search.example.com/?q={query}",
   //   "openTerminalLinksInCmuxBrowser": true,
   //   "hostsToOpenInEmbeddedBrowser": ["localhost", "*.internal.example"]
+  // },
+
+  // "automation": {
+  //   "suppressSubagentNotifications": true
   // },
 
   // "workspaceColors": {
@@ -78,6 +98,10 @@ const settingsFileExample = `{
   //     "Blue": "#1565C0",
   //     "Neon Mint": "#00F5D4"
   //   }
+  // },
+
+  // "workspaceGroups": {
+  //   "newWorkspacePlacement": "afterCurrent"
   // },
 
   // "shortcuts": {
@@ -102,6 +126,11 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
 
 function localizedText(text: LocalizedText, locale: string) {
   return locale.startsWith("ja") ? text.ja : text.en;
+}
+
+function shortcutToConfig(shortcut: { combos: string[][]; configValue?: string }) {
+  if (shortcut.configValue) return shortcut.configValue;
+  return shortcutComboToConfig(shortcut.combos[0] ?? []);
 }
 
 function shortcutComboToConfig(combo: string[]) {
@@ -160,12 +189,15 @@ function hasComplexDefaultValue(value: unknown): boolean {
 }
 
 function PropertyCard({ path, property }: { path: string; property: SchemaProperty }) {
+  const t = useTranslations("docs.configuration");
+  const description = property.descriptionKey ? t(property.descriptionKey) : property.description;
+
   return (
     <div className="rounded-xl border border-border/70 bg-background/40 p-4">
       <div className="mb-2 flex items-center gap-2">
         <code className="text-[12px] font-medium">{path}</code>
       </div>
-      {property.description && <p className="mb-3 text-sm text-muted">{property.description}</p>}
+      {description && <p className="mb-3 text-sm text-muted">{description}</p>}
       <dl className="space-y-2 text-sm">
         <div>
           <dt className="font-medium text-foreground">Type</dt>
@@ -398,7 +430,7 @@ working-directory = ~/code`}</CodeBlock>
                 </div>
                 <div className="text-sm text-muted">
                   <div className="font-medium text-foreground">Default file value</div>
-                  <code>{shortcutComboToConfig(shortcut.combos[0] ?? [])}</code>
+                  <code>{shortcutToConfig(shortcut)}</code>
                 </div>
               </div>
             ))}

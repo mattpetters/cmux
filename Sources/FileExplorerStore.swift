@@ -437,6 +437,7 @@ final class ProcessSSHFileExplorerTransport: SSHFileExplorerTransport {
         private let outPipe = Pipe()
         private let errPipe = Pipe()
         private let lock = NSLock()
+        private let terminationGate = ProcessTerminationGate()
         private var cancelled = false
 
         init(connection: SSHFileExplorerConnection, command: String) {
@@ -454,18 +455,35 @@ final class ProcessSSHFileExplorerTransport: SSHFileExplorerTransport {
                 throw CancellationError()
             }
 
-            try process.run()
+            do {
+                try process.run()
+            } catch {
+                terminationGate.markFinished()
+                throw error
+            }
 
             lock.lock()
-            let shouldTerminate = cancelled && process.isRunning
+            let shouldTerminate = cancelled
             lock.unlock()
-            if shouldTerminate {
+            if terminationGate.markLaunched() || shouldTerminate {
+                guard process.isRunning else {
+                    process.waitUntilExit()
+                    terminationGate.markFinished()
+                    throw CancellationError()
+                }
                 process.terminate()
             }
 
-            let data = outPipe.fileHandleForReading.readDataToEndOfFile()
-            let stderrData = errPipe.fileHandleForReading.readDataToEndOfFile()
+            let data = ProcessPipeReader.readDataToEndOfFileOrEmpty(from: outPipe.fileHandleForReading)
+            let stderrData = ProcessPipeReader.readDataToEndOfFileOrEmpty(from: errPipe.fileHandleForReading)
             process.waitUntilExit()
+            terminationGate.markFinished()
+            lock.lock()
+            let cancelledAfterExit = cancelled
+            lock.unlock()
+            if cancelledAfterExit {
+                throw CancellationError()
+            }
 
             return SSHCommandResult(
                 stdout: String(data: data, encoding: .utf8) ?? "",
@@ -477,12 +495,15 @@ final class ProcessSSHFileExplorerTransport: SSHFileExplorerTransport {
         func terminate() {
             lock.lock()
             cancelled = true
-            let isRunning = process.isRunning
             lock.unlock()
 
-            if isRunning {
-                process.terminate()
+            guard terminationGate.requestTermination() else {
+                return
             }
+            guard process.isRunning else {
+                return
+            }
+            process.terminate()
         }
     }
 
@@ -1254,7 +1275,7 @@ enum GitStatusProvider {
         process.standardError = FileHandle.nullDevice
         do {
             try process.run()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            let data = ProcessPipeReader.readDataToEndOfFileOrEmpty(from: pipe.fileHandleForReading)
             process.waitUntilExit()
             guard process.terminationStatus == 0 else { return nil }
             return String(data: data, encoding: .utf8)
@@ -1281,7 +1302,7 @@ enum GitStatusProvider {
         process.standardError = FileHandle.nullDevice
         do {
             try process.run()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            let data = ProcessPipeReader.readDataToEndOfFileOrEmpty(from: pipe.fileHandleForReading)
             process.waitUntilExit()
             guard process.terminationStatus == 0 else { return nil }
             return String(data: data, encoding: .utf8)
