@@ -993,6 +993,11 @@
           "type": "string",
           "default": "0.1.29",
           "description": "Pinned react-grab version for the browser toolbar helper."
+        },
+        "fullscreenFillsPane": {
+          "type": "boolean",
+          "default": false,
+          "description": "When enabled, clicking fullscreen on a video expands it to fill the browser pane instead of the entire screen."
         }
       }
     },

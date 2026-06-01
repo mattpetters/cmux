@@ -108,5 +108,11 @@ public struct BrowserCatalogSection: SettingCatalogSection {
         userDefaultsKey: "browserImportHintDismissed"
     )
 
+    public let fullscreenFillsPane = DefaultsKey<Bool>(
+        id: "browser.fullscreenFillsPane",
+        defaultValue: false,
+        userDefaultsKey: "browserFullscreenFillsPane"
+    )
+
     public init() {}
 }
