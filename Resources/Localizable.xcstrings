@@ -19159,6 +19159,35 @@
         }
       }
     },
+    "debug.devBuildBanner.prefix": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "//dev"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "//dev"
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "//dev"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "//dev"
+          }
+        }
+      }
+    },
     "debug.devBuildBanner.title": {
       "extractionState": "manual",
       "localizations": {
