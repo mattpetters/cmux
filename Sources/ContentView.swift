@@ -14958,20 +14958,56 @@ private struct SidebarDevFooter: View {
     let onSendFeedback: () -> Void
     @AppStorage(DevBuildBannerDebugSettings.sidebarBannerVisibleKey)
     private var showSidebarDevBuildBanner = DevBuildBannerDebugSettings.defaultShowSidebarBanner
+    private let devBuildLabel = makeSidebarDevBuildLabel()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             SidebarFooterButtons(updateViewModel: updateViewModel, fileExplorerState: fileExplorerState, onSendFeedback: onSendFeedback)
             if showSidebarDevBuildBanner {
-                Text(String(localized: "debug.devBuildBanner.title", defaultValue: "THIS IS A DEV BUILD"))
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.red)
+                Text(devBuildLabel)
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
         }
         .padding(.leading, 6)
         .padding(.trailing, 10)
         .padding(.bottom, 6)
     }
+}
+
+private func makeSidebarDevBuildLabel() -> String {
+    let prefix = String(localized: "debug.devBuildBanner.prefix", defaultValue: "//dev")
+    let commit = sidebarDevBuildCommit()
+    let timestamp = sidebarDevBuildTimestamp(for: sidebarDevBuildDate())
+    return "\(prefix) - \(commit) - \(timestamp)"
+}
+
+private func sidebarDevBuildCommit() -> String {
+    let infoDictionary = Bundle.main.infoDictionary ?? [:]
+    let commit = (infoDictionary["CMUXCommit"] as? String).flatMap { value in
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    } ?? ProcessInfo.processInfo.environment["CMUX_COMMIT"]
+
+    return commit ?? "unknown"
+}
+
+private func sidebarDevBuildDate() -> Date {
+    guard let executableURL = Bundle.main.executableURL,
+          let values = try? executableURL.resourceValues(forKeys: [.contentModificationDateKey]),
+          let buildDate = values.contentModificationDate else {
+        return Date()
+    }
+    return buildDate
+}
+
+private func sidebarDevBuildTimestamp(for date: Date) -> String {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.dateFormat = "MM/dd/yyyy - hh:mm a"
+    return formatter.string(from: date)
 }
 #endif
 
