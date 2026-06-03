@@ -49,7 +49,13 @@ final class MainWindowHostingView<Content: View>: NSHostingView<Content> {
 @MainActor
 func configureCmuxMainWindowDragBehavior(_ window: NSWindow) {
     window.isMovableByWindowBackground = false
-    window.isMovable = false
+    // Keep the window movable so external window managers (Rectangle, yabai, …)
+    // can move/resize it via the Accessibility API. When isMovable is false,
+    // AppKit rejects programmatic frame moves, which makes Rectangle snaps
+    // (throw-to-side, shrink-to-smaller-display) silently fail. Background
+    // dragging from content is still disabled above, so custom titlebar drag
+    // regions remain authoritative for manual drags.
+    window.isMovable = true
 }
 
 @MainActor
