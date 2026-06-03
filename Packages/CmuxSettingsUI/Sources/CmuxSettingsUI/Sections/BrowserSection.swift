@@ -31,6 +31,7 @@ public struct BrowserSection: View {
     @State private var httpAllowlist: DefaultsValueModel<String>
     @State private var importHint: DefaultsValueModel<Bool>
     @State private var reactGrab: DefaultsValueModel<String>
+    @State private var fullscreenFillsPane: DefaultsValueModel<Bool>
 
     @State private var confirmClearHistory: Bool = false
     @State private var httpAllowlistDraft: String = ""
@@ -61,6 +62,7 @@ public struct BrowserSection: View {
         _httpAllowlist = State(initialValue: DefaultsValueModel(store: defaultsStore, key: catalog.browser.insecureHttpHostsAllowedInEmbeddedBrowser))
         _importHint = State(initialValue: DefaultsValueModel(store: defaultsStore, key: catalog.browser.showImportHintOnBlankTabs))
         _reactGrab = State(initialValue: DefaultsValueModel(store: defaultsStore, key: catalog.browser.reactGrabVersion))
+        _fullscreenFillsPane = State(initialValue: DefaultsValueModel(store: defaultsStore, key: catalog.browser.fullscreenFillsPane))
     }
 
     private static let columnWidth: CGFloat = 196
@@ -283,6 +285,19 @@ public struct BrowserSection: View {
                     .frame(width: 100)
                     .font(.system(.body, design: .monospaced))
                     .accessibilityIdentifier("SettingsReactGrabVersionField")
+            }
+            SettingsCardDivider()
+
+            // Fill Pane on Fullscreen
+            SettingsCardRow(
+                configurationReview: .json("browser.fullscreenFillsPane"),
+                String(localized: "settings.browser.fullscreenFillsPane", defaultValue: "Fill Pane on Fullscreen"),
+                subtitle: String(localized: "settings.browser.fullscreenFillsPane.subtitle", defaultValue: "When enabled, clicking fullscreen on a video expands it to fill the browser pane instead of the entire screen.")
+            ) {
+                Toggle("", isOn: Binding(get: { fullscreenFillsPane.current }, set: { fullscreenFillsPane.set($0) }))
+                    .labelsHidden()
+                    .controlSize(.small)
+                    .accessibilityIdentifier("SettingsBrowserFullscreenFillsPaneToggle")
             }
 
             // Browsing History — legacy renders this row unconditionally.

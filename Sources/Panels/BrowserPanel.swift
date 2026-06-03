@@ -926,6 +926,18 @@ enum BrowserLinkOpenSettings {
     }
 }
 
+enum BrowserFullscreenSettings {
+    static let fullscreenFillsPaneKey = "browserFullscreenFillsPane"
+    static let defaultFullscreenFillsPane: Bool = false
+
+    static func fullscreenFillsPane(defaults: UserDefaults = .standard) -> Bool {
+        if defaults.object(forKey: fullscreenFillsPaneKey) == nil {
+            return defaultFullscreenFillsPane
+        }
+        return defaults.bool(forKey: fullscreenFillsPaneKey)
+    }
+}
+
 enum BrowserAvailabilitySettings {
     static let disabledKey = "browserDisabledOverride"
     static let didChangeNotification = Notification.Name("cmux.browserAvailabilityDidChange")
@@ -3944,7 +3956,11 @@ final class BrowserPanel: Panel, ObservableObject {
 
         // Enable developer extras (DevTools)
         configuration.preferences.setValue(true, forKey: "developerExtrasEnabled")
-        configuration.preferences.isElementFullscreenEnabled = true
+        
+        // When pane-fill fullscreen is enabled, disable native element fullscreen
+        // so the JS shim can intercept and fill the pane instead of the display.
+        let paneFillEnabled = BrowserFullscreenSettings.fullscreenFillsPane()
+        configuration.preferences.isElementFullscreenEnabled = !paneFillEnabled
 
         // Enable JavaScript
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
@@ -3992,6 +4008,21 @@ final class BrowserPanel: Panel, ObservableObject {
                 forMainFrameOnly: true
             )
         )
+
+        // Pane-fill fullscreen shim: when enabled, overrides the HTML5 Fullscreen API
+        // so videos expand to fill the browser pane (WebView viewport) instead of
+        // triggering native macOS display fullscreen. Main frame only — cross-origin
+        // iframes (e.g. YouTube ad frames) cannot be shimmed due to browser security
+        // boundaries; they will either fall back to native fullscreen or fail silently.
+        if paneFillEnabled {
+            configuration.userContentController.addUserScript(
+                WKUserScript(
+                    source: BrowserPaneFillFullscreenShim.scriptSource,
+                    injectionTime: .atDocumentStart,
+                    forMainFrameOnly: true
+                )
+            )
+        }
     }
 
     private func bindWebView(_ webView: CmuxWebView) {
