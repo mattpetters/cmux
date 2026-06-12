@@ -104,18 +104,55 @@ struct FeedEventClassificationTests {
         #expect(classify("gemini", "PreToolUse", tool: "AskUserQuestion").actionable == true)
     }
 
-    /// Codex has a dedicated `PermissionRequest` feed event, so its
-    /// pre-tool events (`PreToolUse` and the Codex-specific
-    /// `beforeShellExecution`) are telemetry only.
+    /// Codex runs `PermissionRequest` hooks before its own approval reviewer,
+    /// so Feed must keep both pre-tool events and permission requests as
+    /// telemetry. Otherwise "Approve for me" gets bypassed by cmux's Feed UI.
     @Test func codexPreToolUseIsTelemetry() {
         #expect(classify("codex", "PreToolUse", tool: "shell").actionable == false)
         #expect(classify("codex", "beforeShellExecution", tool: "shell").actionable == false)
         #expect(classify("codex", "beforeShellExecution", tool: "shell").name == "PreToolUse")
-        #expect(classify("codex", "PermissionRequest", tool: "shell").actionable == true)
+        #expect(classify("codex", "PermissionRequest", tool: "shell").name == "PreToolUse")
+        #expect(classify("codex", "PermissionRequest", tool: "shell").actionable == false)
     }
 
     /// Unknown source + unknown event is safe by default.
     @Test func unknownSourceUnknownEventIsSafe() {
         #expect(classify("totally-new-agent", "some_future_event", tool: "Bash").actionable == false)
+    }
+
+    // MARK: Kiro (camelCase events, no dedicated approval event)
+
+    /// Kiro has no dedicated approval event, so its `preToolUse` escalates
+    /// side-effecting tools to an approval — resolved against Kiro's internal
+    /// tool names (`fs_write`, `execute_bash`, `use_aws`). Read-only `fs_read`
+    /// stays telemetry. Registering kiro is required because its camelCase
+    /// event names are absent from the generic table and would otherwise
+    /// resolve to `.unknown` (non-actionable), silently dropping approvals.
+    @Test func kiroPreToolUseEscalatesSideEffectingTools() {
+        #expect(classify("kiro", "preToolUse", tool: "fs_write").name == "PermissionRequest")
+        #expect(classify("kiro", "preToolUse", tool: "fs_write").actionable == true)
+        #expect(classify("kiro", "preToolUse", tool: "execute_bash").actionable == true)
+        #expect(classify("kiro", "preToolUse", tool: "use_aws").actionable == true)
+        #expect(classify("kiro", "preToolUse", tool: "fs_read").actionable == false)
+        #expect(classify("kiro", "preToolUse", tool: "fs_read").name == "PreToolUse")
+    }
+
+    /// Kiro lifecycle + post-tool events are telemetry only and map to the
+    /// right wire names despite their camelCase spelling.
+    @Test func kiroLifecycleEventsClassifyCorrectly() {
+        #expect(classify("kiro", "postToolUse", tool: "fs_write").name == "PostToolUse")
+        #expect(classify("kiro", "postToolUse", tool: "fs_write").actionable == false)
+        #expect(classify("kiro", "agentSpawn").name == "SessionStart")
+        #expect(classify("kiro", "userPromptSubmit").name == "UserPromptSubmit")
+        #expect(classify("kiro", "stop").name == "Stop")
+    }
+
+    /// Kiro's case-insensitive tool aliases must stay scoped to kiro: another
+    /// agent emitting a lowercase `fs_write` / `write` must NOT be escalated
+    /// (guards the resolved "lowercase tools broaden Feed prompts" fix).
+    @Test func kiroToolAliasesDoNotLeakToOtherAgents() {
+        #expect(classify("gemini", "PreToolUse", tool: "fs_write").actionable == false)
+        #expect(classify("gemini", "PreToolUse", tool: "write").actionable == false)
+        #expect(classify("gemini", "PreToolUse", tool: "execute_bash").actionable == false)
     }
 }

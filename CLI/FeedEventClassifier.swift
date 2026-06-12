@@ -37,7 +37,7 @@ struct FeedEventClassifier {
         toolName: String
     ) -> (String, Bool) {
         let semantic = feedEventSemantic(source: source, event: event)
-        return wireMapping(for: semantic, toolName: toolName)
+        return wireMapping(for: semantic, source: source, toolName: toolName)
     }
 
     /// User-attention semantic of a hook/feed event, independent of the
@@ -104,6 +104,7 @@ struct FeedEventClassifier {
     /// semantics.
     private static func wireMapping(
         for semantic: FeedEventSemantic,
+        source: String,
         toolName: String
     ) -> (String, Bool) {
         switch semantic {
@@ -117,7 +118,7 @@ struct FeedEventClassifier {
             // permission request so the user can approve/deny from the
             // Feed sidebar. Read-only tools stay non-actionable
             // telemetry so we don't flood the Actionable view.
-            if Self.sideEffectingTools.contains(toolName) {
+            if Self.isSideEffectingTool(toolName, source: source) {
                 return ("PermissionRequest", true)
             }
             return ("PreToolUse", false)
@@ -168,7 +169,10 @@ struct FeedEventClassifier {
             "Notification": .statusNotification,
         ],
         "codex": [
-            "PermissionRequest": .approvalRequest,
+            // Codex runs PermissionRequest hooks before its own approval
+            // reviewer. Treat this as telemetry so "Approve for me" can still
+            // use Codex's auto-review path instead of blocking on cmux Feed.
+            "PermissionRequest": .toolStart,
             "PreToolUse": .toolStart,
             "beforeShellExecution": .toolStart,
             "PostToolUse": .toolEnd,
@@ -196,6 +200,21 @@ struct FeedEventClassifier {
             "on_session_reset": .sessionStart,
             "on_session_end": .sessionEnd,
             "on_session_finalize": .sessionEnd,
+        ],
+        // Kiro emits camelCase hook events and has no dedicated approval
+        // event, so its pre-tool event escalates side-effecting tools to an
+        // approval (resolved against the kiro tool aliases in
+        // ``isSideEffectingTool``). Registering kiro explicitly is required:
+        // its lowercase event names are absent from
+        // ``genericFeedEventSemantics`` and would otherwise resolve to
+        // ``FeedEventSemantic/unknown`` (non-actionable), silently dropping
+        // every kiro approval.
+        "kiro": [
+            "preToolUse": .toolStartMaybeApproval,
+            "postToolUse": .toolEnd,
+            "userPromptSubmit": .promptSubmit,
+            "agentSpawn": .sessionStart,
+            "stop": .response,
         ],
     ]
 
@@ -241,4 +260,50 @@ struct FeedEventClassifier {
         "manage_subagents",
         "generate_image",
     ]
+
+    /// Kiro emits lowercase / internal tool names (`fs_write`,
+    /// `execute_bash`, `use_aws`, …) absent from ``sideEffectingTools``.
+    /// Matched case-insensitively, but only for the `kiro` source, so another
+    /// agent's lowercase tool name is never broadened into an approval prompt.
+    private static let kiroSideEffectingToolAliases: Set<String> = [
+        "bash",
+        "write",
+        "edit",
+        "multiedit",
+        "notebookedit",
+        "apply_patch",
+        "shell",
+        "execute_bash",
+        "fs_write",
+        "use_aws",
+        "aws",
+        "terminal",
+        "run_command",
+        "write_to_file",
+        "replace_file_content",
+        "multi_replace_file_content",
+        "manage_task",
+        "schedule",
+        "ask_permission",
+        "invoke_subagent",
+        "define_subagent",
+        "manage_subagents",
+        "generate_image",
+    ]
+
+    /// Whether a tool mutates state and deserves an approval prompt. Exact
+    /// match against ``sideEffectingTools`` for every source; the `kiro`
+    /// source additionally matches its case-insensitive internal aliases.
+    /// Kept source-scoped so another agent's lowercase tool name is not
+    /// escalated into an approval.
+    static func isSideEffectingTool(_ toolName: String, source: String) -> Bool {
+        guard !toolName.isEmpty else { return false }
+        if sideEffectingTools.contains(toolName) {
+            return true
+        }
+        if source == "kiro" {
+            return kiroSideEffectingToolAliases.contains(toolName.lowercased())
+        }
+        return false
+    }
 }

@@ -81,6 +81,7 @@ public struct SettingsWindowRoot: View {
 
     private var defaultsStore: UserDefaultsSettingsStore { runtime.userDefaultsStore }
     private var jsonStore: JSONConfigStore { runtime.jsonStore }
+    private var secretStore: SecretFileStore { runtime.secretStore }
     private var catalog: SettingCatalog { runtime.catalog }
     private var hostActions: SettingsHostActions { runtime.hostActions }
     private var accountFlow: AccountFlow? { runtime.accountFlow }
@@ -427,7 +428,7 @@ public struct SettingsWindowRoot: View {
     @ViewBuilder
     private var sectionStack: some View {
         // Order matches the legacy in-app SettingsView scroll order:
-        // Account, App, Terminal, TextBox, Sidebar, Beta Features,
+        // Account, App, Terminal, TextBox, Mobile, Sidebar, Beta Features,
         // Automation, Browser (with embedded Import), Global Hotkey,
         // Keyboard Shortcuts, Workspace Colors, cmux.json, Reset.
         AccountSection(
@@ -455,7 +456,10 @@ public struct SettingsWindowRoot: View {
         TextBoxSection(defaultsStore: defaultsStore, catalog: catalog)
             .id(anchorID(for: .textBox))
 
-        SidebarSection(defaultsStore: defaultsStore, catalog: catalog)
+        MobileSection(defaultsStore: defaultsStore, catalog: catalog, hostActions: hostActions)
+            .id(anchorID(for: .mobile))
+
+        SidebarSection(defaultsStore: defaultsStore, catalog: catalog, hostActions: hostActions)
             .id(anchorID(for: .sidebarAppearance))
 
         BetaFeaturesSection(defaultsStore: defaultsStore, catalog: catalog)
@@ -464,6 +468,7 @@ public struct SettingsWindowRoot: View {
         AutomationSection(
             defaultsStore: defaultsStore,
             jsonStore: jsonStore,
+            secretStore: secretStore,
             catalog: catalog,
             errorLog: runtime.errorLog
         )

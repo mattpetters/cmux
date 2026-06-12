@@ -13,6 +13,7 @@ extension CMUXCLI {
         let configDirEnvOverride: String? // e.g. "CODEX_HOME" overrides configDir
         let configDirEnvOverrideSubpath: String? // e.g. "GROK_HOME" + "hooks"
         let createConfigDirIfMissing: Bool // for agents whose hook dir is created lazily
+        let configDirResolver: (@Sendable () -> String)?
         let sessionStoreSuffix: String // e.g. "cursor" -> ~/.cmuxterm/cursor-hook-sessions.json
         let disableEnvVar: String   // e.g. "CMUX_CURSOR_HOOKS_DISABLED"
         let hookMarker: String      // Marker in commands: "cmux hooks cursor"
@@ -45,10 +46,15 @@ extension CMUXCLI {
         /// approve/deny a permission / plan / question.
         let feedHookEvents: [String]
         let postInstallAction: PostInstallAction?
+        /// Optional CLI note printed after a successful install (or
+        /// "already up to date") to guide a required activation step — e.g.
+        /// Kiro applies its hooks only when run as the `cmux` agent.
+        let postInstallNote: String?
 
         enum HookFormat {
             case flat       // Cursor: {"hooks": {"event": [{"command": "..."}]}, "version": 1}
-            case nested(timeoutMs: Int)  // Codex/Gemini: nested with type/command/timeout
+            case nested(timeoutMs: Int)  // Nested type/command/timeout hooks; timeout unit is agent-specific.
+            case kiroAgentJSON(timeoutMs: Int) // ~/.kiro/agents/*.json flat command entries with timeout_ms
             case antigravityJSON(timeoutSeconds: Int) // ~/.gemini/config/hooks.json named hook groups
             case rovoDevYAML
             case hermesAgentYAML
@@ -65,6 +71,9 @@ extension CMUXCLI {
 
         /// Resolves the config directory, respecting env override if set.
         func resolvedConfigDir() -> String {
+            if let configDirResolver {
+                return configDirResolver()
+            }
             let home = ProcessInfo.processInfo.environment["HOME"].flatMap { value -> String? in
                 let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
                 return trimmed.isEmpty ? nil : trimmed
@@ -93,6 +102,7 @@ extension CMUXCLI {
              configDir: String, configFile: String, configDirEnvOverride: String? = nil,
              configDirEnvOverrideSubpath: String? = nil,
              createConfigDirIfMissing: Bool = false,
+             configDirResolver: (@Sendable () -> String)? = nil,
              binaryName: String? = nil,
              sessionStoreSuffix: String, disableEnvVar: String, hookMarker: String,
              format: HookFormat, events: [HookEvent],
@@ -100,12 +110,14 @@ extension CMUXCLI {
              publishesStopNotification: Bool = true,
              sessionEndIsTurnBoundary: Bool = false,
              feedHookEvents: [String] = [],
-             postInstallAction: PostInstallAction? = nil) {
+             postInstallAction: PostInstallAction? = nil,
+             postInstallNote: String? = nil) {
             self.name = name; self.displayName = displayName; self.statusKey = statusKey
             self.configDir = configDir; self.configFile = configFile
             self.configDirEnvOverride = configDirEnvOverride
             self.configDirEnvOverrideSubpath = configDirEnvOverrideSubpath
             self.createConfigDirIfMissing = createConfigDirIfMissing
+            self.configDirResolver = configDirResolver
             self.binaryName = binaryName ?? name
             self.sessionStoreSuffix = sessionStoreSuffix; self.disableEnvVar = disableEnvVar
             self.hookMarker = hookMarker; self.format = format; self.events = events
@@ -117,6 +129,7 @@ extension CMUXCLI {
             })
             self.feedHookEvents = feedHookEvents
             self.postInstallAction = postInstallAction
+            self.postInstallNote = postInstallNote
         }
     }
 
@@ -145,7 +158,7 @@ extension CMUXCLI {
             name: "codex", displayName: "Codex", statusKey: "codex",
             configDir: ".codex", configFile: "hooks.json", configDirEnvOverride: "CODEX_HOME",
             sessionStoreSuffix: "codex", disableEnvVar: "CMUX_CODEX_HOOKS_DISABLED",
-            hookMarker: "cmux hooks codex", format: .nested(timeoutMs: 5000),
+            hookMarker: "cmux hooks codex", format: .nested(timeoutMs: 5),
             events: [
                 .init(agentEvent: "SessionStart", cmuxSubcommand: "session-start"),
                 .init(agentEvent: "UserPromptSubmit", cmuxSubcommand: "prompt-submit"),
@@ -187,6 +200,15 @@ extension CMUXCLI {
             events: []
         ),
         AgentHookDef(
+            name: "omp", displayName: "OMP", statusKey: "omp",
+            configDir: ".omp/agent", configFile: "extensions/cmux-omp-session.ts",
+            createConfigDirIfMissing: true,
+            configDirResolver: { CMUXCLI.resolvedOmpAgentDirectory().path },
+            sessionStoreSuffix: "omp", disableEnvVar: "CMUX_OMP_HOOKS_DISABLED",
+            hookMarker: "cmux hooks omp", format: .flat,
+            events: []
+        ),
+        AgentHookDef(
             name: "amp", displayName: "Amp", statusKey: "amp",
             configDir: ".config/amp", configFile: "plugins/cmux-session.ts",
             sessionStoreSuffix: "amp", disableEnvVar: "CMUX_AMP_HOOKS_DISABLED",
@@ -219,6 +241,24 @@ extension CMUXCLI {
                 .init(agentEvent: "SessionEnd", cmuxSubcommand: "session-end"),
             ],
             feedHookEvents: ["PreToolUse"]
+        ),
+        AgentHookDef(
+            name: "kiro", displayName: "Kiro", statusKey: "kiro",
+            configDir: ".kiro/agents", configFile: "cmux.json",
+            configDirEnvOverride: "KIRO_HOME", configDirEnvOverrideSubpath: "agents",
+            createConfigDirIfMissing: true, binaryName: "kiro-cli",
+            sessionStoreSuffix: "kiro", disableEnvVar: "CMUX_KIRO_HOOKS_DISABLED",
+            hookMarker: "cmux hooks kiro", format: .kiroAgentJSON(timeoutMs: 5000),
+            events: [
+                .init(agentEvent: "agentSpawn", cmuxSubcommand: "session-start"),
+                .init(agentEvent: "userPromptSubmit", cmuxSubcommand: "prompt-submit"),
+                .init(agentEvent: "stop", cmuxSubcommand: "stop"),
+            ],
+            feedHookEvents: ["preToolUse", "postToolUse"],
+            postInstallNote: String(
+                localized: "cli.hooks.kiro.postInstallNote",
+                defaultValue: "Kiro applies these hooks only when run as the cmux agent. Start Kiro with `kiro-cli chat --agent cmux`, or make it the default with `kiro-cli settings chat.defaultAgent cmux`."
+            )
         ),
         AgentHookDef(
             name: "antigravity", displayName: "Antigravity", statusKey: "antigravity",
@@ -332,7 +372,15 @@ extension CMUXCLI {
     }
 
     static func feedHookCommandString(for def: AgentHookDef, agentEvent: String) -> String {
-        agentHookShellCommand("cmux hooks feed --source \(def.name) --event \(agentEvent)", for: def)
+        switch def.format {
+        case .kiroAgentJSON:
+            return exitTwoPropagatingAgentHookShellCommand(
+                "cmux hooks feed --source \(def.name) --event \(agentEvent)",
+                for: def
+            )
+        default:
+            return agentHookShellCommand("cmux hooks feed --source \(def.name) --event \(agentEvent)", for: def)
+        }
     }
 
     private static let grokPinnedHookMarker = "cmux-grok-hook-v2"
@@ -344,6 +392,11 @@ extension CMUXCLI {
         }
         let routedArguments = command.hasPrefix("cmux ") ? String(command.dropFirst("cmux ".count)) : command
         return "cmux_cli=\"${CMUX_BUNDLED_CLI_PATH:-}\"; if [ -z \"$cmux_cli\" ] || [ ! -x \"$cmux_cli\" ]; then cmux_cli=\"$(command -v cmux 2>/dev/null || true)\"; fi; if [ -n \"$CMUX_SURFACE_ID\" ] && [ \"$\(def.disableEnvVar)\" != \"1\" ] && [ -n \"$cmux_cli\" ]; then { if [ -n \"${CMUX_SOCKET_PATH:-}\" ]; then \"$cmux_cli\" --socket \"$CMUX_SOCKET_PATH\" \(routedArguments); else \"$cmux_cli\" \(routedArguments); fi; } || echo '{}'; else echo '{}'; fi"
+    }
+
+    private static func exitTwoPropagatingAgentHookShellCommand(_ command: String, for def: AgentHookDef) -> String {
+        let routedArguments = command.hasPrefix("cmux ") ? String(command.dropFirst("cmux ".count)) : command
+        return "cmux_cli=\"${CMUX_BUNDLED_CLI_PATH:-}\"; if [ -z \"$cmux_cli\" ] || [ ! -x \"$cmux_cli\" ]; then cmux_cli=\"$(command -v cmux 2>/dev/null || true)\"; fi; if [ -n \"$CMUX_SURFACE_ID\" ] && [ \"$\(def.disableEnvVar)\" != \"1\" ] && [ -n \"$cmux_cli\" ]; then if [ -n \"${CMUX_SOCKET_PATH:-}\" ]; then \"$cmux_cli\" --socket \"$CMUX_SOCKET_PATH\" \(routedArguments); else \"$cmux_cli\" \(routedArguments); fi; status=$?; if [ \"$status\" -eq 2 ]; then exit 2; fi; if [ \"$status\" -ne 0 ]; then echo '{}'; fi; else echo '{}'; fi"
     }
 
     private static func usesPinnedHookDispatch(_ def: AgentHookDef) -> Bool {

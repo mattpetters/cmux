@@ -91,14 +91,17 @@ Environment:
 | `new-window` | Create a new window. |
 | `focus-window` | Focus a window by handle. |
 | `close-window` | Close a window by handle. |
+| `window displays` | List connected displays (name, index, main flag). |
+| `window display <name\|index>` | Move the instance's window(s) onto a display by name (exact, substring) or index, preserving size. Does not steal focus. With `--window`, targets that window; otherwise moves all main windows. `--list` aliases `window displays`. |
 | `move-workspace-to-window` | Move a workspace into a target window. |
 | `reorder-workspace` | Reorder a workspace inside a window. |
 | `reorder-workspaces` | Atomically reorder workspaces inside pinned and unpinned groups. |
 | `workspace-action` | Run workspace context-menu actions from the CLI. |
+| `workspace` | Namespace for workspace verbs: `list`, `create`, `close`, `rename`, `select`, `reconnect`, `disconnect`, `group`. `workspace reconnect` manually reconnects a remote (SSH) workspace — including one whose automatic reconnect suspended because the host was unreachable — and `workspace disconnect` stops its remote connection. Both accept a positional workspace handle or `--workspace <id\|ref\|index>`, defaulting to the caller's workspace, then the selected one. |
 | `move-tab-to-new-workspace` | Move a tab or surface into a newly created workspace. |
 | `list-workspaces` | List workspaces. |
 | `new-workspace` | Create a workspace, optionally with cwd, command, description, and layout. |
-| `ssh` | Open an SSH-backed workspace. |
+| `ssh` | Open an SSH-backed workspace. Preserves the caller's live `SSH_AUTH_SOCK` for app-launched OpenSSH processes so `ForwardAgent yes` from ssh_config works normally. Supports `-A` / `--forward-agent` to request forwarding and `-a` / `--no-forward-agent` to disable forwarding for a workspace. Agent forwarding remains opt-in because forwarded agents can be used by processes on the remote host while the SSH session is active. |
 | `remote-daemon-status` | Print bundled remote daemon version, asset, checksum, and cache status. |
 | `ssh-session-list` | List persisted SSH PTY sessions for one remote workspace or all remote workspaces. Supports `--json`. |
 | `ssh-session-attach` | Create a local terminal surface that reattaches to an existing persisted SSH PTY session. |
@@ -333,6 +336,13 @@ Config subcommands:
 | `config path`, `config paths` | Print cmux.json paths, docs URL, schema URL, backup reminder, and reload command without a socket. |
 | `config docs`, `config documentation` | Print the same output as `docs settings` without a socket. |
 | `config reload` | Ask the running cmux app to reload configuration. Requires a socket. |
+| `config get sidebar-font-size` | Print the effective sidebar text size. |
+| `config set sidebar-font-size <points>` | Write the sidebar text size to cmux's editable Ghostty config and reload the running app when available. |
+| `config sidebar-font-size [points]` | Get the sidebar text size, or set it when a point size is provided. |
+| `config get surface-tab-bar-font-size` | Print the effective workspace tab bar text size. |
+| `config set surface-tab-bar-font-size <points>` | Write the workspace tab bar text size to cmux's editable Ghostty config and reload the running app when available. |
+| `config surface-tab-bar-font-size [points]` | Get the workspace tab bar text size, or set it when a point size is provided. |
+| `config get <key>`, `config set <key> <points>` | Generic get/set for `sidebar-font-size` and `surface-tab-bar-font-size`. |
 
 `config doctor --json` outputs an object with `ok`, `error_count`,
 `findings`, `reload_command`, `docs_url`, and `schema_url`. Each finding includes
@@ -389,7 +399,7 @@ the expected text without connecting to a cmux socket.
 - `cmux settings --help` -> `Usage: cmux settings [open [target]|path|docs|<target>]`
 - `cmux settings path` -> `Config files:`
 - `cmux settings docs` -> `Config files:`
-- `cmux config --help` -> `Usage: cmux config <doctor|check|validate|path|paths|docs|documentation|reload>`
+- `cmux config --help` -> `Usage: cmux config <doctor|check|validate|path|paths|docs|documentation|reload|get|set|sidebar-font-size|surface-tab-bar-font-size>`
 - `cmux config path` -> `Config files:`
 - `cmux config docs` -> `Config files:`
 - `cmux welcome --help` -> `Usage: cmux welcome`
@@ -429,6 +439,7 @@ the expected text without connecting to a cmux socket.
 - `cmux new-workspace --help` -> `Usage: cmux new-workspace`
 - `cmux list-workspaces --help` -> `Usage: cmux list-workspaces`
 - `cmux ssh --help` -> `Usage: cmux ssh <destination>`
+- `cmux ssh --help` -> `--forward-agent`
 - `cmux ssh-session-list --help` -> `Usage: cmux ssh-session-list`
 - `cmux ssh-session-attach --help` -> `Usage: cmux ssh-session-attach --session-id <id>`
 - `cmux ssh-session-cleanup --help` -> `Usage: cmux ssh-session-cleanup`
